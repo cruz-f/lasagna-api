@@ -459,5 +459,5 @@ def LASAGNA(sites, SCOPE, seedIdx=-1, trim=False, ICThres=0.0, covThres=0.4):
 def Align(sequences, k):
     headers = sequences['headers']
     seqs = sequences['sequences']
-    aligned, _, strands = LASAGNA(seqs, k)
-    return pd.DataFrame({'sequences': aligned, 'headers': headers, 'strand': strands})
+    aligned, _, _ = LASAGNA(seqs, k)
+    return {'sequences': aligned, 'headers': headers}
