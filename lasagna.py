@@ -1,5 +1,19 @@
+"""
+The following code is based on the following paper:
+LASAGNA-Search: an integrated web tool for transcription factor binding site search and visualization
+Chih Lee, and Chun-Hsi Huang
+BioTechniques, Vol. 54, No. 3, March 2013, pp. 141–153
+doi 10.2144/000113999
+
+The LASAGNA-Search web tool is available at:
+https://biogrid-lasagna.engr.uconn.edu/lasagna_search/index.php
+
+This script has been retrieved from the following URL:
+https://biogrid-lasagna.engr.uconn.edu/lasagna_search/downloads/lasagna_source.tar.gz
+
+It has been converted from python2 to python3 and modified to be used as a simple web service using the flask framework.
+"""
 import numpy
-import pandas as pd
 
 complement = str.maketrans('acgtACGT-', 'tgcaTGCA-')
 
@@ -11,15 +25,15 @@ def ReverseComplement(s):
 def ComputeCounts(sites, SCOPE, counts_2mer=None, alphabet='acgt-'):
     l = len(sites[0])
     bgCounts = {}
-    counts = numpy.array([{} for i in range(l)])  # a dict at each position
+    counts = numpy.array([{}] * l)  # a dict at each position
     scopeStart = 1
     if SCOPE > 0:
         if counts_2mer is None:
-            counts_2mer = numpy.array([[{} for i in range(l - scope)]
+            counts_2mer = numpy.array([[{} for _ in range(l - scope)]
                                        for scope in range(1, SCOPE + 1)])
         else:
             scopeStart = len(counts_2mer) + 1
-            tmp = numpy.array([[{} for i in range(l - scope)] \
+            tmp = numpy.array([[{} for _ in range(l - scope)]
                                for scope in range(len(counts_2mer) + 1, SCOPE + 1)])
             counts_2mer = numpy.concatenate((counts_2mer, tmp))
     nSites = len(sites)
@@ -27,7 +41,8 @@ def ComputeCounts(sites, SCOPE, counts_2mer=None, alphabet='acgt-'):
         assert len(sites[i]) == l, '\n'.join(sites)
         for k in range(l):
             c = sites[i][k].lower()
-            if not c in alphabet: continue
+            if c not in alphabet:
+                continue
             counts[k][c] = counts[k].get(c, 0.0) + 1.0
             bgCounts[c] = bgCounts.get(c, 0.0) + 1.0
         for scope in range(scopeStart, SCOPE + 1):
@@ -52,7 +67,7 @@ def ComputeFreqs(sites, SCOPE, alphabet='acgt-', bgCounts=None, counts=None,
     for c in alphabet:
         # Smooth bgFreqs by a pseudo count of 1.0
         bgFreqs[c] = (bgCounts.get(c, 0.0) + 1.0 / float(aSize)) / (n + 1)
-    freqs = numpy.array([{'a': 0.0, 'c': 0.0, 'g': 0.0, 't': 0.0, '-': 0.0} \
+    freqs = numpy.array([{'a': 0.0, 'c': 0.0, 'g': 0.0, 't': 0.0, '-': 0.0}
                          for _ in range(l)])  # a dict at each position
     for i in range(l):
         n = float(sum(counts[i].values()))
@@ -60,7 +75,7 @@ def ComputeFreqs(sites, SCOPE, alphabet='acgt-', bgCounts=None, counts=None,
             freqs[i][c] = (counts[i].get(c, 0.0) + bgFreqs.get(c, 0.0)) / (n + 1.0)
     freqs_2mer = None
     if SCOPE > 0:
-        freqs_2mer = numpy.array([[{} for i in range(l - scope)] \
+        freqs_2mer = numpy.array([[{} for _ in range(l - scope)]
                                   for scope in range(1, SCOPE + 1)])
     for scope in range(1, SCOPE + 1):
         for i in range(l - scope):
@@ -77,7 +92,7 @@ def e(s, n):
     return (s - 1.0) / (2.0 * numpy.log(2) * n)
 
 
-## With small sample correction
+# With small sample correction
 def ComputeIC(sites, SCOPE, counts=None, counts_2mer=None):
     alphabet = 'acgt'
     aSize = len(alphabet)
@@ -98,11 +113,11 @@ def ComputeIC(sites, SCOPE, counts=None, counts_2mer=None):
             IC[k] += freq * numpy.log2(freq)
         IC[k] = max(0.0, IC[k] - e(aSize, n))
     if SCOPE > 0:
-        IC_2mer = [numpy.ones(l - scope) * (-numpy.log2(1.0 / float(aSize ** 2))) \
+        IC_2mer = [numpy.ones(l - scope) * (-numpy.log2(1.0 / float(aSize ** 2)))
                    for scope in range(1, SCOPE + 1)]  # information content for pairs of positions
     for scope in range(1, SCOPE + 1):
         for k in range(l - scope):
-            n = float(sum([counts_2mer[scope - 1][k].get((c1, c2), 0.0) \
+            n = float(sum([counts_2mer[scope - 1][k].get((c1, c2), 0.0)
                            for c1 in alphabet for c2 in alphabet]))
             if n == 0.0:
                 IC_2mer[scope - 1][k] = 0.0
@@ -130,13 +145,15 @@ def SuggestSize(IC, coverages, ICThres=0.0, covThres=0.4):
     maxL = len(IC)
     if isinstance(ICThres, str) and ICThres.startswith('mean'):
         tmp = ICThres[4:]
-        if tmp.isdigit(): maxL = int(tmp)
+        if tmp.isdigit():
+            maxL = int(tmp)
         ICThres = numpy.mean(IC)
     if covThres == "mean":
         covThres = numpy.mean(coverages)
     l = len(IC)
     trimmedL = l
     cntL = cntR = 0
+    i = 0
     for i in range(l):
         if IC[i] > ICThres and coverages[i] > covThres:
             break
@@ -163,7 +180,7 @@ def TrimPSSM(model, cntL, cntR):
     start = cntL
     end = cntL + model.l
     model.scores = model.scores[start:end]
-    if hasattr(model, 'scores_2mer') and model.scores_2mer != None:
+    if hasattr(model, 'scores_2mer') and model.scores_2mer is not None:
         for scope in range(model.SCOPE, 0, -1):
             end = cntL + model.l - scope
             if scope + 1 > model.l:
@@ -181,26 +198,22 @@ class modelPSSM:
 def PSSM(sites, SCOPE, alphabet='acgt-', bgCounts=None, counts=None,
          counts_2mer=None, trim=False, ICThres=0.0, covThres=0.4,
          A=True):
-    aSize = len(alphabet)
     l = len(sites[0])
     assert SCOPE >= 0, 'SCOPE must be non-negative!'
     SCOPE = min(SCOPE, l - 1)
-    score_2mer = None
-    if SCOPE > 0:
-        scores_2mer = [numpy.array([{} for i in range(l - scope)]) \
-                       for scope in range(1, SCOPE + 1)]
     if bgCounts is None or counts is None:
         bgCounts, counts, counts_2mer = ComputeCounts(sites, SCOPE,
                                                       alphabet=alphabet)
     bgFreqs, freqs, freqs_2mer = ComputeFreqs(sites, SCOPE, alphabet=alphabet,
                                               bgCounts=bgCounts, counts=counts,
                                               counts_2mer=counts_2mer)
-    scores = numpy.array([{} for i in range(l)])
+    scores = numpy.array([{} for _ in range(l)])
     for i in range(l):
         for c in alphabet:
             scores[i][c] = numpy.log2(freqs[i].get(c, 0.0) / bgFreqs.get(c, 0.0))
-        if A: scores[i]['-'] = min(scores[i].values())
-    scores_2mer = [numpy.array([{} for i in range(l - scope)]) \
+        if A:
+            scores[i]['-'] = min(scores[i].values())
+    scores_2mer = [numpy.array([{} for _ in range(l - scope)])
                    for scope in range(1, SCOPE + 1)] if SCOPE > 0 else None
     for scope in range(1, SCOPE + 1):
         for i in range(l - scope):
@@ -223,7 +236,7 @@ def PSSM(sites, SCOPE, alphabet='acgt-', bgCounts=None, counts=None,
     model.cntL = model.cntR = 0
     if trim:
         IC, IC_2mer = ComputeIC(sites, 0, counts=counts, counts_2mer=counts_2mer)
-        if IC != None:
+        if IC is not None:
             coverages = ComputeCoverage(counts, len(sites), alphabet='acgt')
             model.sugL, model.cntL, model.cntR = SuggestSize(IC, coverages,
                                                              ICThres=ICThres,
@@ -264,13 +277,15 @@ def SlideScoreByPSSM(seq, model):
     seq = seq.lower()
     seqL = len(seq)
     bestScore = None
+    iStart = 0
     jStart = 0  # first position of the PSSM
+    bestAlign = (0, 0)
     for iStart in range(seqL - 1, -1, -1):  # last letter of the sequence
         subseqL = min(seqL - iStart, model.l)
         subseq = seq[iStart:(iStart + subseqL)]
         subseq = subseq + '-' * (model.l - subseqL)
         score = ScoreByPSSM(subseq, model)
-        if bestScore == None or score > bestScore:
+        if bestScore is None or score > bestScore:
             bestScore = score
             bestAlign = (iStart, jStart)
     for jStart in range(1, model.l):
@@ -278,7 +293,7 @@ def SlideScoreByPSSM(seq, model):
         subseq = seq[:subseqL]
         subseq = '-' * jStart + subseq + '-' * (model.l - subseqL - jStart)
         score = ScoreByPSSM(subseq, model)
-        if bestScore == None or score > bestScore:
+        if bestScore is None or score > bestScore:
             bestScore = score
             bestAlign = (iStart, jStart)
     return bestScore, bestAlign
@@ -287,6 +302,7 @@ def SlideScoreByPSSM(seq, model):
 def NextSite(model, sites, lens, indices, maxIt=5):
     bestScore = None
     k = 0
+    bestSite, bestK, bestStrand, bestJSeq, bestJPSSM = None, None, None, None, None
     while k < maxIt and \
             (k < len(indices) and lens[indices[k]] == lens[indices[0]]):
         i = indices[k]
@@ -294,7 +310,7 @@ def NextSite(model, sites, lens, indices, maxIt=5):
         for site, strand in [(sites[i], '+'),
                              (ReverseComplement(sites[i]), '-')]:
             score, (jSeq, jPSSM) = SlideScoreByPSSM(site, model)
-            if bestScore == None or score > bestScore:
+            if bestScore is None or score > bestScore:
                 bestScore = score
                 bestK = k
                 bestJSeq = jSeq
@@ -327,30 +343,28 @@ def AddGaps(aligned, jSeq, jPSSM,
     seqL = len(aligned[-1])
     leftDiff = jPSSM - jSeq
     rightDiff = (PSSML - jPSSM) - (seqL - jSeq)
-    leftGaps = '-' * abs(leftDiff)
-    rightGaps = '-' * abs(rightDiff)
     if leftDiff < 0 or rightDiff < 0:
         leftGaps = '-' * abs(min(0, leftDiff))
         rightGaps = '-' * abs(min(0, rightDiff))
         for i in range(len(aligned) - 1):
             aligned[i] = leftGaps + aligned[i] + rightGaps
-        ## Update counts
+        # Update counts
         nLeft = len(leftGaps)
         nRight = len(rightGaps)
         if isinstance(bgCounts, dict):
             bgCounts['-'] = bgCounts.get('-', 0) + (nLeft + nRight) * (nAligned - 1)
         if isinstance(counts, numpy.ndarray):
-            counts = numpy.concatenate((numpy.array([{'-': float(nAligned - 1)} for i in range(nLeft)]), counts,
-                                        numpy.array([{'-': float(nAligned - 1)} for i in range(nRight)])))
+            counts = numpy.concatenate((numpy.array([{'-': float(nAligned - 1)} for _ in range(nLeft)]), counts,
+                                        numpy.array([{'-': float(nAligned - 1)} for _ in range(nRight)])))
         l = len(aligned[0])
         if counts_2mer is not None and SCOPE > 0:
             if type(counts_2mer) == numpy.ndarray:
                 counts_2mer = counts_2mer.tolist()
             for scope in range(1, SCOPE + 1):
                 if len(counts_2mer[scope - 1]) == 0:
-                    counts_2mer[scope - 1] = [{} for k in range(l - scope)]
+                    counts_2mer[scope - 1] = [{} for _ in range(l - scope)]
                 else:
-                    counts_2mer[scope - 1] = [{} for k in range(nLeft)] + counts_2mer[scope - 1] + [{} for k in
+                    counts_2mer[scope - 1] = [{} for _ in range(nLeft)] + counts_2mer[scope - 1] + [{} for _ in
                                                                                                     range(nRight)]
             for i in range(nAligned - 1):
                 for scope in range(1, SCOPE + 1):
@@ -383,14 +397,14 @@ def AddGaps(aligned, jSeq, jPSSM,
                     continue
                 p = (c1, c2)
                 counts_2mer[scope - 1][k][p] = counts_2mer[scope - 1][k].get(p, 0.0) + 1.0
-    if not (bgCounts == None and counts == None and counts_2mer == None):
+    if not (bgCounts is None and counts is None and counts_2mer is None):
         return bgCounts, counts, counts_2mer
 
 
 def FormAlignment(info):
     minOffset = None
     for (i, strand, offset, site) in info:
-        minOffset = offset if minOffset == None else min(minOffset, offset)
+        minOffset = offset if minOffset is None else min(minOffset, offset)
     info_new = []
     maxL = 0
     for (i, strand, offset, site) in info:
@@ -409,8 +423,6 @@ def FormAlignment(info):
 
 
 def LASAGNA(sites, SCOPE, seedIdx=-1, trim=False, ICThres=0.0, covThres=0.4):
-    sizeThres = 1
-    nSites = len(sites)
     lens = numpy.array([len(site) for site in sites])
     indices = lens.argsort().tolist()
     aligned = []
