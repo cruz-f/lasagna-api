@@ -25,7 +25,7 @@ def ReverseComplement(s):
 def ComputeCounts(sites, SCOPE, counts_2mer=None, alphabet='acgt-'):
     l = len(sites[0])
     bgCounts = {}
-    counts = numpy.array([{}] * l)  # a dict at each position
+    counts = numpy.array([{} for _ in range(l)])  # a dict at each position
     scopeStart = 1
     if SCOPE > 0:
         if counts_2mer is None:
@@ -199,7 +199,6 @@ def PSSM(sites, SCOPE, alphabet='acgt-', bgCounts=None, counts=None,
          counts_2mer=None, trim=False, ICThres=0.0, covThres=0.4,
          A=True):
     l = len(sites[0])
-    assert SCOPE >= 0, 'SCOPE must be non-negative!'
     SCOPE = min(SCOPE, l - 1)
     if bgCounts is None or counts is None:
         bgCounts, counts, counts_2mer = ComputeCounts(sites, SCOPE,
@@ -303,8 +302,7 @@ def NextSite(model, sites, lens, indices, maxIt=5):
     bestScore = None
     k = 0
     bestSite, bestK, bestStrand, bestJSeq, bestJPSSM = None, None, None, None, None
-    while k < maxIt and \
-            (k < len(indices) and lens[indices[k]] == lens[indices[0]]):
+    while k < maxIt and (k < len(indices) and lens[indices[k]] == lens[indices[0]]):
         i = indices[k]
         # Score sites[i] with model
         for site, strand in [(sites[i], '+'),
@@ -368,8 +366,9 @@ def AddGaps(aligned, jSeq, jPSSM,
                                                                                                     range(nRight)]
             for i in range(nAligned - 1):
                 for scope in range(1, SCOPE + 1):
-                    for k in list(range(min(nLeft, l - scope))) + list(
-                            range(max(nLeft, nLeft + PSSML - scope), l - scope)):
+                    _range = list(range(min(nLeft, l - scope))) + list(range(max(nLeft, nLeft + PSSML - scope),
+                                                                             l - scope))
+                    for k in _range:
                         c1 = aligned[i][k].lower()
                         c2 = aligned[i][k + scope].lower()
                         if not (c1 in alphabet and c2 in alphabet):
@@ -471,5 +470,5 @@ def LASAGNA(sites, SCOPE, seedIdx=-1, trim=False, ICThres=0.0, covThres=0.4):
 def Align(sequences, k):
     headers = sequences['headers']
     seqs = sequences['sequences']
-    aligned, _, _ = LASAGNA(seqs, k)
-    return {'sequences': aligned, 'headers': headers}
+    aligned, _, strands = LASAGNA(seqs, k)
+    return {'headers': headers, 'sequences': aligned, 'strands': strands}
